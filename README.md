@@ -8,7 +8,7 @@ Modern davomat nazorat tizimi - Hikvision yuz tanish terminallari orqali hodimla
 
 ## ✨ Asosiy Imkoniyatlar
 
-- 🔐 **Avtomatik Davomat** - Hikvision DS-K1T343EFWX yuz tanish terminali orqali kirish/chiqishni qayd etish
+- 🔐 **Avtomatik Davomat** - Hikvision yuz tanish terminali orqali kirish/chiqishni qayd etish
 - 📊 **Real-time Dashboard** - Jonli statistika va vizualizatsiya
 - 📈 **Hisobotlar** - Kunlik, haftalik va oylik davomat hisobotlari
 - ⏰ **Kechikish Monitoring** - Avtomatik kechikish va erta ketishni aniqlash
