@@ -44,6 +44,7 @@ db.sqlite3-journal
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
