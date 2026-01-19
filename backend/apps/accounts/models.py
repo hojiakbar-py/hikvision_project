@@ -90,16 +90,25 @@ class User(AbstractUser):
 
     class Role(models.TextChoices):
         """
-        Foydalanuvchi rollari.
+        Foydalanuvchi rollari (TZ bo'yicha).
 
         Attributes:
-            ADMIN: Tizim administratori - barcha huquqlarga ega
-            HR: HR menejeri - hodimlar va davomat boshqaruvi
-            VIEWER: Ko'ruvchi - faqat o'qish huquqi
+            EMPLOYEE: Oddiy xodim - faqat o'z ma'lumotlarini ko'radi
+            MANAGER: Bo'lim boshlig'i - o'z bo'limidagi xodimlarni boshqaradi
+            ACCOUNTANT: Buxgalter - barcha bo'limlarni ko'radi va tasdiqlaydi
+            CHIEF_ACCOUNTANT: Glavniy buxgalter - yakuniy tasdiqlash va 1C ga yuklash
+            SUPERUSER: Administrator - to'liq tizim nazorati
         """
-        ADMIN = 'admin', _('Administrator')
-        HR = 'hr', _('HR Manager')
-        VIEWER = 'viewer', _('Viewer')
+        EMPLOYEE = 'employee', _('Oddiy xodim')
+        MANAGER = 'manager', _("Bo'lim boshlig'i")
+        ACCOUNTANT = 'accountant', _('Buxgalter')
+        CHIEF_ACCOUNTANT = 'chief_accountant', _('Glavniy buxgalter')
+        SUPERUSER = 'superuser', _('Administrator')
+
+        # Legacy support (eski rollar)
+        ADMIN = 'admin', _('Administrator (legacy)')
+        HR = 'hr', _('HR Manager (legacy)')
+        VIEWER = 'viewer', _('Viewer (legacy)')
 
     role = models.CharField(
         max_length=20,
@@ -173,22 +182,86 @@ class User(AbstractUser):
     @property
     def is_admin(self) -> bool:
         """
-        Foydalanuvchi admin ekanligini tekshirish.
+        Foydalanuvchi admin ekanligini tekshirish (legacy support).
 
         Returns:
-            bool: True agar admin bo'lsa
+            bool: True agar admin yoki superuser bo'lsa
         """
-        return self.role == self.Role.ADMIN
+        return self.role in [self.Role.ADMIN, self.Role.SUPERUSER]
 
     @property
     def is_hr(self) -> bool:
         """
-        Foydalanuvchi HR manager ekanligini tekshirish.
+        Foydalanuvchi HR manager ekanligini tekshirish (legacy support).
 
         Returns:
             bool: True agar HR manager bo'lsa
         """
         return self.role == self.Role.HR
+
+    @property
+    def is_employee(self) -> bool:
+        """
+        Oddiy xodim rolini tekshirish.
+
+        Returns:
+            bool: True agar oddiy xodim bo'lsa
+        """
+        return self.role == self.Role.EMPLOYEE
+
+    @property
+    def is_manager(self) -> bool:
+        """
+        Bo'lim boshlig'i rolini tekshirish.
+
+        Returns:
+            bool: True agar bo'lim boshlig'i bo'lsa
+        """
+        return self.role == self.Role.MANAGER
+
+    @property
+    def is_accountant(self) -> bool:
+        """
+        Buxgalter rolini tekshirish.
+
+        Returns:
+            bool: True agar buxgalter bo'lsa
+        """
+        return self.role == self.Role.ACCOUNTANT
+
+    @property
+    def is_chief_accountant(self) -> bool:
+        """
+        Glavniy buxgalter rolini tekshirish.
+
+        Returns:
+            bool: True agar glavniy buxgalter bo'lsa
+        """
+        return self.role == self.Role.CHIEF_ACCOUNTANT
+
+    @property
+    def is_superuser_role(self) -> bool:
+        """
+        Superuser rolini tekshirish.
+
+        Returns:
+            bool: True agar superuser bo'lsa
+        """
+        return self.role == self.Role.SUPERUSER
+
+    @property
+    def managed_department(self):
+        """
+        Manager bo'lsa, qaysi bo'limni boshqaradi.
+
+        Returns:
+            Department | None: Boshqarilayotgan bo'lim
+        """
+        if not self.is_manager or not self.employee:
+            return None
+
+        from apps.employees.models import Department
+        return Department.objects.filter(head=self.employee).first()
 
     @property
     def full_name(self) -> str:
@@ -204,7 +277,7 @@ class User(AbstractUser):
 
     def has_permission(self, permission: str) -> bool:
         """
-        Ma'lum bir ruxsatni tekshirish.
+        Ma'lum bir ruxsatni tekshirish (TZ talabiga mos).
 
         Args:
             permission: Tekshiriladigan ruxsat nomi
@@ -213,18 +286,125 @@ class User(AbstractUser):
             bool: True agar ruxsat mavjud bo'lsa
 
         Example:
-            >>> user.has_permission('can_edit_employees')
+            >>> user.has_permission('can_edit_salary')
             True
         """
         permission_map = {
-            'can_manage_users': [self.Role.ADMIN],
-            'can_edit_employees': [self.Role.ADMIN, self.Role.HR],
-            'can_view_reports': [self.Role.ADMIN, self.Role.HR, self.Role.VIEWER],
-            'can_manage_devices': [self.Role.ADMIN],
-            'can_sync_attendance': [self.Role.ADMIN, self.Role.HR],
+            # Legacy permissions
+            'can_manage_users': [self.Role.ADMIN, self.Role.SUPERUSER],
+            'can_edit_employees': [self.Role.ADMIN, self.Role.HR, self.Role.SUPERUSER],
+            'can_view_reports': [self.Role.ADMIN, self.Role.HR, self.Role.VIEWER,
+                                self.Role.MANAGER, self.Role.ACCOUNTANT,
+                                self.Role.CHIEF_ACCOUNTANT, self.Role.SUPERUSER],
+            'can_manage_devices': [self.Role.ADMIN, self.Role.SUPERUSER],
+            'can_sync_attendance': [self.Role.ADMIN, self.Role.HR, self.Role.SUPERUSER],
+
+            # TZ bo'yicha yangi permissions
+            'can_view_own_data': [self.Role.EMPLOYEE, self.Role.MANAGER,
+                                 self.Role.ACCOUNTANT, self.Role.CHIEF_ACCOUNTANT,
+                                 self.Role.SUPERUSER],
+            'can_edit_department_salary': [self.Role.MANAGER],
+            'can_submit_to_accountant': [self.Role.MANAGER],
+            'can_approve_salary': [self.Role.ACCOUNTANT, self.Role.CHIEF_ACCOUNTANT,
+                                  self.Role.SUPERUSER],
+            'can_return_to_manager': [self.Role.ACCOUNTANT, self.Role.CHIEF_ACCOUNTANT,
+                                     self.Role.SUPERUSER],
+            'can_final_approve': [self.Role.CHIEF_ACCOUNTANT, self.Role.SUPERUSER],
+            'can_export_to_1c': [self.Role.CHIEF_ACCOUNTANT, self.Role.SUPERUSER],
+            'can_unlock_documents': [self.Role.SUPERUSER],
+            'can_view_all_departments': [self.Role.ACCOUNTANT, self.Role.CHIEF_ACCOUNTANT,
+                                        self.Role.SUPERUSER],
+            'can_edit_with_comment': [self.Role.MANAGER, self.Role.ACCOUNTANT,
+                                     self.Role.CHIEF_ACCOUNTANT, self.Role.SUPERUSER],
         }
         allowed_roles = permission_map.get(permission, [])
         return self.role in allowed_roles
+
+    def can_edit_salary_for_employee(self, employee) -> bool:
+        """
+        Berilgan hodimning ish haqini tahrirlash huquqi bormi tekshirish.
+
+        TZ talabi:
+        - Employee: Yo'q
+        - Manager: Faqat o'z bo'limidagi hodimlar
+        - Accountant: Hamma, lekin izoh bilan
+        - Chief Accountant: Hamma
+        - Superuser: Hamma
+
+        Args:
+            employee: Employee obyekti
+
+        Returns:
+            bool: True agar tahrirlash mumkin bo'lsa
+        """
+        # Employee - hech kimni tahrirlolmaydi
+        if self.is_employee:
+            return False
+
+        # Superuser - hammani
+        if self.is_superuser_role:
+            return True
+
+        # Chief Accountant - hammani
+        if self.is_chief_accountant:
+            return True
+
+        # Accountant - hammani (izoh majburiy, lekin bu metodda faqat huquq tekshiriladi)
+        if self.is_accountant:
+            return True
+
+        # Manager - faqat o'z bo'limidagi hodimlar
+        if self.is_manager and self.employee:
+            managed_dept = self.managed_department
+            if managed_dept:
+                return employee.department_id == managed_dept.id
+
+        return False
+
+    def can_view_salary_for_employee(self, employee) -> bool:
+        """
+        Berilgan hodimning ish haqini ko'rish huquqi bormi.
+
+        TZ talabi:
+        - Employee: Faqat o'ziniki
+        - Manager: O'z bo'limidagi hodimlar
+        - Accountant: Hamma
+        - Chief Accountant: Hamma
+        - Superuser: Hamma
+
+        Args:
+            employee: Employee obyekti
+
+        Returns:
+            bool: True agar ko'rish mumkin bo'lsa
+        """
+        # O'zi bo'lsa
+        if self.employee and self.employee.id == employee.id:
+            return True
+
+        # Superuser - hammani
+        if self.is_superuser_role:
+            return True
+
+        # Chief Accountant - hammani
+        if self.is_chief_accountant:
+            return True
+
+        # Accountant - hammani
+        if self.is_accountant:
+            return True
+
+        # Manager - o'z bo'limidagi hodimlar
+        if self.is_manager and self.employee:
+            managed_dept = self.managed_department
+            if managed_dept:
+                return employee.department_id == managed_dept.id
+
+        # Employee - faqat o'ziniki
+        if self.is_employee:
+            return self.employee and self.employee.id == employee.id
+
+        return False
 
     def update_last_activity(self) -> None:
         """

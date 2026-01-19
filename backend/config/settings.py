@@ -45,6 +45,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Custom middleware'lar (TZ talabiga mos)
+    'apps.core.middleware.LastActivityMiddleware',
+    'apps.core.middleware.AuditLoggingMiddleware',
+    'apps.core.middleware.RoleAccessMiddleware',
+    # 'apps.core.middleware.CommentRequiredMiddleware',  # Agar kerak bo'lsa yoqish mumkin
 ]
 
 ROOT_URLCONF = 'config.urls'

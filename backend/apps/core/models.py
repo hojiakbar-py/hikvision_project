@@ -1213,3 +1213,22 @@ class OrganizationSettings(models.Model):
         if not self.working_days:
             self.working_days = [0, 1, 2, 3, 4]  # Dushanba - Juma
         super().save(*args, **kwargs)
+
+
+# Audit va History modellarini import qilish
+from .models_audit import (
+    AuditLog,
+    FieldChangeHistory,
+    log_model_change,
+    get_model_history
+)
+
+__all__ = [
+    'Organization',
+    'Branch',
+    'OrganizationSettings',
+    'AuditLog',
+    'FieldChangeHistory',
+    'log_model_change',
+    'get_model_history',
+]
