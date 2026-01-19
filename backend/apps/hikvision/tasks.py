@@ -25,8 +25,9 @@ def sync_attendance_from_device(device_id: int = None, hours_back: int = 24):
         device_id: Qurilma ID si (None bo'lsa default qurilma ishlatiladi)
         hours_back: Necha soat oldingi ma'lumotlarni olish
     """
-    start_time = timezone.now() - timedelta(hours=hours_back)
-    end_time = timezone.now()
+    now_local = timezone.localtime(timezone.now())
+    start_time = now_local - timedelta(hours=hours_back)
+    end_time = now_local
 
     if device_id:
         try:
@@ -147,6 +148,7 @@ def process_attendance_event(event: dict, device=None) -> bool:
         ).exists()
 
         if existing:
+            update_daily_attendance(employee, timestamp.date())
             return False
 
         # Event turini aniqlash (kirish yoki chiqish)
@@ -211,17 +213,29 @@ def update_daily_attendance(employee: Employee, date):
     if not records.exists():
         return
 
+    # Qurilma event turlari doim aniq bo'lmasligi mumkin.
+    # Shu sababli kirish/chiqishni vaqt bo'yicha aniqlaymiz.
+    # Kirish: 09:00 gacha bo'lgan eng erta event.
+    # Chiqish: 18:00 +/- 4 daqiqa oralig'idagi eng kech event.
+    check_in_cutoff = datetime.strptime('09:00', '%H:%M').time()
+    checkout_start = datetime.strptime('17:56', '%H:%M').time()
+    checkout_end = datetime.strptime('18:04', '%H:%M').time()
+
     first_check_in = None
+    for record in records:
+        if record.timestamp.time() <= check_in_cutoff:
+            first_check_in = record.timestamp
+            break
+    if not first_check_in:
+        first_check_in = records.first().timestamp
+
     last_check_out = None
-
-    check_ins = records.filter(event_type='check_in')
-    check_outs = records.filter(event_type='check_out')
-
-    if check_ins.exists():
-        first_check_in = check_ins.first().timestamp
-
-    if check_outs.exists():
-        last_check_out = check_outs.last().timestamp
+    checkout_candidates = [
+        record.timestamp for record in records
+        if checkout_start <= record.timestamp.time() <= checkout_end
+    ]
+    if checkout_candidates:
+        last_check_out = checkout_candidates[-1]
 
     # DailyAttendance yaratish yoki yangilash
     daily, created = DailyAttendance.objects.get_or_create(
@@ -230,16 +244,27 @@ def update_daily_attendance(employee: Employee, date):
         defaults={
             'scheduled_start': employee.work_start_time,
             'scheduled_end': employee.work_end_time,
+            'first_check_in': first_check_in,
+            'last_check_out': last_check_out,
         }
     )
 
+    # Yangilanishlar
     daily.first_check_in = first_check_in
     daily.last_check_out = last_check_out
     daily.scheduled_start = employee.work_start_time
     daily.scheduled_end = employee.work_end_time
 
-    # Qayta hisoblash
-    daily.recalculate()
+    # Hozircha ish jadvaliga qattiq bog'lanmasdan faqat kirish/chiqishni ko'rsatamiz
+    if first_check_in:
+        daily.status = DailyAttendance.Status.PRESENT
+    else:
+        daily.status = DailyAttendance.Status.ABSENT
+    daily.late_minutes = 0
+    daily.early_leave_minutes = 0
+    daily.overtime_minutes = 0
+    daily.total_work_minutes = daily.calculate_total_work_minutes()
+
     daily.save()
 
 

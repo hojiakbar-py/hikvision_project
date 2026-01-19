@@ -16,6 +16,7 @@ urlpatterns = [
 
     # API endpoints
     path('api/auth/', include('apps.accounts.urls')),
+    path('api/core/', include('apps.core.urls')),
     path('api/employees/', include('apps.employees.urls')),
     path('api/attendance/', include('apps.attendance.urls')),
     path('api/hikvision/', include('apps.hikvision.urls')),

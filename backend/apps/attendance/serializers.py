@@ -1,6 +1,7 @@
 """Serializers for attendance app."""
 
 from rest_framework import serializers
+from django.utils import timezone
 from .models import AttendanceRecord, DailyAttendance, WorkSchedule
 from apps.employees.serializers import EmployeeListSerializer
 
@@ -43,12 +44,12 @@ class DailyAttendanceSerializer(serializers.ModelSerializer):
 
     def get_check_in_time(self, obj):
         if obj.first_check_in:
-            return obj.first_check_in.strftime('%H:%M')
+            return timezone.localtime(obj.first_check_in).strftime('%H:%M')
         return None
 
     def get_check_out_time(self, obj):
         if obj.last_check_out:
-            return obj.last_check_out.strftime('%H:%M')
+            return timezone.localtime(obj.last_check_out).strftime('%H:%M')
         return None
 
     def get_work_hours(self, obj):

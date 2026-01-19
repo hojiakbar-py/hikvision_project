@@ -136,8 +136,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             'employee': serializer.data,
             'today': {
                 'status': today_attendance.status if today_attendance else 'absent',
-                'check_in': today_attendance.first_check_in.strftime('%H:%M') if today_attendance and today_attendance.first_check_in else None,
-                'check_out': today_attendance.last_check_out.strftime('%H:%M') if today_attendance and today_attendance.last_check_out else None,
+                'check_in': timezone.localtime(today_attendance.first_check_in).strftime('%H:%M') if today_attendance and today_attendance.first_check_in else None,
+                'check_out': timezone.localtime(today_attendance.last_check_out).strftime('%H:%M') if today_attendance and today_attendance.last_check_out else None,
                 'late_minutes': today_attendance.late_minutes if today_attendance else 0,
                 'early_leave_minutes': today_attendance.early_leave_minutes if today_attendance else 0,
                 'work_minutes': today_attendance.total_work_minutes if today_attendance else 0,

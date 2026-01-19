@@ -446,7 +446,11 @@ class HikvisionService:
                 elif isinstance(match_list, list):
                     events = match_list
             elif 'AcsEvent' in data:
-                events = data['AcsEvent']
+                acs_event = data['AcsEvent']
+                if isinstance(acs_event, dict) and 'InfoList' in acs_event:
+                    events = acs_event.get('InfoList', [])
+                else:
+                    events = acs_event
                 if isinstance(events, dict):
                     events = [events]
 
@@ -458,9 +462,13 @@ class HikvisionService:
 
             # Agar barcha natijalar olindi bo'lsa
             total = data.get('AcsEventSearchResult', {}).get('totalMatches', 0)
+            if not total and isinstance(data.get('AcsEvent'), dict):
+                total = data['AcsEvent'].get('totalMatches') or data['AcsEvent'].get('numOfMatches')
             if isinstance(total, str):
                 total = int(total)
-            if position >= total:
+            if total and position >= total:
+                break
+            if not total and len(events) < batch_size:
                 break
 
         return all_events
